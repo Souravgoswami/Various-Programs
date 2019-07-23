@@ -11,7 +11,7 @@ if ARGV.any? { |x| x.start_with?(/-(-help|h)/i) }
 		Arguments:
 			--help / -h			Print this help message and exit.
 			--delay=value / -d=value	Specify the delay time. Where value is the time. [default: 0.005]
-			--pins=value / -p=value		Specify the output pins. Where the values are the pin numbers
+			--pins=values / -p=values	Specify the output pins. Where the values are the pin numbers
 							separated with ','. Example: --pins=3,7,8. Default: 7,8.
 	EOF
 	exit 0
