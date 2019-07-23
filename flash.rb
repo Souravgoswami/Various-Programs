@@ -3,7 +3,7 @@
 if ARGV.any? { |x| x.start_with?(/-(-help|h)/i) }
 	puts <<~EOF
 		This is a Raspberry Pi program to control lights connected to GPIO.
-		This program dims all the lights sequentially.
+		This program flashes all the lights (at given pins) sequentially.
 		Please make sure the connected light is dimmable.
 		LED lights are recommended.
 		This program depends on rpi_gpio gem.
