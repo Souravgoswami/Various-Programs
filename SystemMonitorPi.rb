@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 puts "This is #{RUBY_PLATFORM}. Which is an unsupported platform. A GNU/Linux system is needed" unless /linux/ === RUBY_PLATFORM
-puts "The Ruby Version is too old for #{File.basename(__FILE__)} to work. Make sure you have at lease Ruby 2.5.0+" if (RUBY_VERSION.split('.').first(2).join.to_i < 25)
+puts "The Ruby Version is too old for #{File.basename(__FILE__)} to work. Make sure you have at least Ruby 2.5.0+" if (RUBY_VERSION.split('.').first(2).join.to_i < 25)
 
 GC.start(full_mark: true, immediate_sweep: true)
 require 'io/console'
@@ -11,27 +11,27 @@ COLOUR2 = 63
 COLOUR3 = 196
 COLOUR_TITLE = "\e[1;33m"
 SWAP_LABEL = "\e[1;38;5;165m"
-ROUND = ARGV.select { |x| x.start_with?(/--round=|-r=/) }[-1].to_s.split('=')[-1].to_i.then { |x| x > 0 ? x.to_i : 2 }
-TIME_FORMAT = ARGV.select { |x| x.start_with?(/(-f|--format)=/) }[0].to_s.split('=')[-1].then { |x| x ? x : "%I:%M:%S:%2N %p" }
+ROUND = ARGV.select { |x| x.start_with?(/-(-round|r)=\d+/) }[-1].to_s.split(?=)[-1].to_i.then { |x| x > 0 ? x.to_i : 2 }
+TIME_FORMAT = ARGV.select { |x| x.start_with?(/(-f|--format)=/) }[0].to_s.split(?=)[-1].then { |x| x ? x : "%I:%M:%S:%2N %p" }
 
 String.define_method(:colourize) do |colour = [154, 184, 208, 203, 198, 164, 129, 92]|
 	clr, return_val = colour.dup.concat(colour.reverse), ''
 	colour_size = clr.size - 1
 
 	str_len, i, index = length - 1, -1, 0
-	div = delete("\s").length./(colour_size.next).then { |x| x == 0 ? 1 : x }
+	div = delete("\s").length./(colour_size.next).then { |x| x.zero? ? 1 : x }
 
 	while i < str_len do
 		s = slice(i += 1)
-		index += 1 if ((i) % div == 0 && index < colour_size) && i > 1 && s != "\s"
+		index += 1 if (i % div == 0 && index < colour_size) && i > 1 && s != "\s"
 		return_val.concat("\e[38;5;#{clr[index]}m#{s}")
 	end
 
 	return_val + "\e[0m"
 end
 
-Float.define_method(:pad) { round(::ROUND).to_s.then { |x| x.split('.')[1].to_s.length.then { |y| y < ROUND && y != 0 ? x + '0'.*(ROUND - y)  : x } } }
-Float.define_method(:percent) { |arg| fdiv(100).*(arg) }
+Float.define_method(:pad) { round(::ROUND).to_s.then { |x| x.split(?.)[1].length.then { |y| y < ROUND ? x << ?0.*(ROUND - y)  : x } } }
+Float.define_method(:percent) { |arg| fdiv(100) * arg }
 
 def help
 	split_colour = [203, 198, 199, 164, 129, 93, 63, 33, 39, 44, 49, 48, 83, 118, 184, 214, 208]
@@ -40,8 +40,10 @@ def help
 		#{$PROGRAM_NAME} is a lighweight and simple resource monitoring program for
 		the Raspberry Pi.
 		It can measure memory usage, swap usage, CPU usage, and display time and uptime.
+
 		Usage:
 			#{$PROGRAM_NAME} [arguments]
+
 		Arguments:
 			1. --format= / -f=		The format of the time. [Default: %I:%M:%S:%#{ROUND}N %p ]
 			2. --help / -h			Show this help message.
@@ -62,18 +64,18 @@ def main(sleep = 0.05)
 	swap, cpu_usage, cpu_bar = '', '', ''
 
 	bars = %W(\xE2\x96\x81 \xE2\x96\x83 \xE2\x96\x85 \xE2\x9A\xA0)
-	clocks = %W(\xF0\x9F\x95\x9B \xF0\x9F\x95\x90 \xF0\x9F\x95\x91 \xF0\x9F\x95\x92 \xF0\x9F\x95\x93 \xF0\x9F\x95\x94 \xF0\x9F\x95\x95 \xF0\x9F\x95\x96
-					\xF0\x9F\x95\x97 \xF0\x9F\x95\x98 \xF0\x9F\x95\x99 \xF0\x9F\x95\x9A)
+	zclock = "\xF0\x9F\x95\x8F"
+	clocks = 12.times.map { zclock.next!.dup }
 
 	loop do
 		width = STDOUT.winsize[1]
 
 		# calculate memory usage
-		mem_total, mem_available = IO.readlines('/proc/meminfo').then { |x| [x[0], x[2]] }.map(&:split).then { |x| [x[0][1], x[1][1]] }.map { |x| x.to_i./(1024.0) }
+		mem_total, mem_available = IO.readlines('/proc/meminfo').values_at(0, 2).map { |x| x.split.at(1).to_i./(1024.0) }
 		mem_used = mem_total.-(mem_available)
 
 		# calculate swap usage
-		swap_devs = IO.readlines('/proc/swaps')[1..-1].map(&:split).map { |x| [x[0], x[2], x[3]] }
+		swap_devs = IO.readlines('/proc/swaps')[1..-1].map { |x| x.split.values_at(0, 2, 3) }
 
 		# calculate CPU usage
 		prev_file = IO.readlines('/proc/stat').select { |line| line.start_with?('cpu') }
@@ -119,8 +121,8 @@ def main(sleep = 0.05)
 		) unless swap_devs.empty?
 
 		# time
-		hr, min, sec = IO.read('/proc/uptime').to_i.then do
-			|x| [(x./(3600).to_s.then { |x| x.length == 1 ? '0' + x : x }), (x.%(3600)./(60).to_s.then { |x| x.length == 1 ? '0' + x : x }), (x.%(60).to_s.then { |x| x.length == 1 ? '0' + x : x })]
+		hr, min, sec = IO.read('/proc/uptime').to_i.then do |x|
+			[(x./(3600).to_s.tap { |x| x.prepend(?0) if x.length == 1 }), (x.%(3600)./(60).to_s.tap { |x| x.prepend(?0) if x.length == 1 }), (x.%(60).to_s.tap { |x| x.prepend(?0) if x.length == 1 })]
 		end
 
 		current_time = "#{Time.new.strftime(TIME_FORMAT)}"
