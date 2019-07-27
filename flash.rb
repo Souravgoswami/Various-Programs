@@ -11,7 +11,7 @@ if ARGV.any? { |x| x.start_with?(/-(-help|h)/i) }
 		Arguments:
 			--help / -h			Print this help message and exit.
 			--delay=value / -d=value	Specify the delay time. Where value is the time. [default: 0.005]
-			--pins=values / -p=values	Specify the output pins. Where the values are the pin numbers
+			--pins=value / -p=value		Specify the output pins. Where the values are the pin numbers
 							separated with ','. Example: --pins=3,7,8. Default: 7,8.
 	EOF
 	exit 0
@@ -34,15 +34,15 @@ end
 
 Object.prepend(RPi::GPIO)
 set_numbering(:board)
-set_warnings(false)
+set_warnings(true)
 
 def flash(pins: [7, 8], sleep: 0.5 )
 	pins.each { |pin| setup(pin, as: :output) }
 
 	pins.each do |pin|
-		setup(pin, as: :output, initialize: :low)
+		set_high(pin)
 		Kernel.sleep(sleep)
-		setup(pin, as: :output, initialize: :high)
+		set_low(pin)
 	end while true
 end
 
@@ -50,8 +50,13 @@ PINS = ARGV.select { |x| x.start_with?(/-(-pins|p)=(\d+,?)*/) }[-1].to_s.split('
 
 begin
 	flash(pins: PINS, sleep: ARGV.select { |x| x.start_with?(/-(-delay|d)=\d+/) }[-1].to_s.split('=')[-1].then { |x| x ? x.to_i : 0.075 })
+
 rescue Interrupt, SignalException, SystemExit
-	puts
-	PINS.each { |pin| clean_up pin.tap { |p| puts ":: Clearing Pin: #{p}" } }
+	puts "\nClearning up pin #{PINS.join(', ')}"
+	PINS.each(&method(:clean_up))
 	exit 0
+
+rescue Exception => e
+	STDERR.puts(e)
+	exit 127
 end

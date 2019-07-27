@@ -5,14 +5,13 @@ if ARGV.any? { |x| x.start_with?(/-(-help|h)/i) }
 		This program dims all the lights sequentially.
 		Please make sure the connected light is dimmable.
 		LED lights are recommended.
-		Dependency: rpi_gpio.
 
 		Arguments:
 			--help / -h			Print this help message and exit.
 			--delay=value / -d=value	Specify the delay time. Where value is the time. [default: 0.005]
 			--frequency=value / -freq=value	Specify the frequency. Where value is the frequency. [default: 500]
 			--step=value / -s=value		Specify the step. Where value is the step. [default: 0.25]
-			--pins=values / -p=values	Specify the output pins. Where the values are the pin numbers
+			--pins=value / -p=value		Specify the output pins. Where the values are the pin numbers
 							separated with ','. Example: --pins=3,7,8. Default: 7,8.
 	EOF
 	exit 0
@@ -67,6 +66,6 @@ begin
 	flash(pins: PINS, sleep: DELAY, step: STEP, freq: FREQUENCY)
 rescue Interrupt, SignalException, SystemExit
 	puts
-	PINS.each { |pin| clean_up pin.tap { |p| puts ":: Clearing Pin: #{p}" } }
+	PINS.each(&method(:clean_up))
 	exit 0
 end
