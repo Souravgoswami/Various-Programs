@@ -4,8 +4,8 @@ GC.start(full_mark: true, immediate_sweep: true)
 STDOUT.sync = STDERR.sync = true
 VERSION = 1.0
 
-
 class Notify
+	LOGFILE = "/tmp/#{File.basename(__FILE__)}.log"
 	USER = ENV['USER']
 	@@notify_interval = 0
 	@@last_notified = Time.new - @@notify_interval
@@ -20,13 +20,12 @@ class Notify
 		self
 	end
 
-	define_singleton_method(:save_to_log) do |message, file = "/tmp/#{File.basename(__FILE__)}.log"|
+	define_singleton_method(:save_to_log) do |message, file = LOGFILE|
 		# From kernel 4.19 the new sysctl fs.protected regular flag can lock the file from writing if the file is created by another user on file systems like /tmp
 		# Even though File.writable?('/tmp/filename') returns true, it's not always writable.
 		# In such case, we have to implement an exception handling block to make sure that the program doesn't crash while having such permission errors!
 		begin
-			truncate_log(1)
-			tap { File.open(file, 'a+') { |f| f.puts(message + "\n" + '-' * (message.each_line.map(&:length).max)) } }
+			tap { File.open(file, 'a+') { |f| f.puts(message + ?\n + ?- * (message.each_line.map(&:length).max)) } }
 		rescue Errno::EACCES
 				STDERR.puts ":: Can't write to #{file}!"
 			unless File.owned?(file)
@@ -40,7 +39,7 @@ class Notify
 		end
 	end
 
-	def self.truncate_log(lines = 1, file = "/tmp/#{File.basename(__FILE__)}.log")
+	def self.truncate_log(lines = 1, file = LOGFILE)
 		begin
 			File.write(file, File.read(file).split(/\n*\-+\n*/)[lines..-1].to_a.map { |x| x + ?\n + ?- * x.each_line.map(&:length).max }.join(?\n)) if !File.zero?(file) & File.writable?(file) & !lines.zero?
 		rescue Errno::EACCES
@@ -50,12 +49,12 @@ class Notify
 	end
 end
 
-def main(logging = true, notification_interval = 5, sleep = 1)
+def main(logging: true, notify: true, notification_interval: 5, sleep: 1)
 	notification = ''
 	action = 'swapoff $dev && swapon $dev'
 
 	# Stop spamming
-	Notify.send("#{Time.new.ctime}\nStarted Monitoring System Memory Usage")
+	Notify.send("#{Time.new.ctime}\nStarted Monitoring System Memory Usage") if notify
 	Notify.notify_interval = notification_interval
 
 	loop do
@@ -72,13 +71,13 @@ def main(logging = true, notification_interval = 5, sleep = 1)
 
 				if mem_available > swap_used * 2
 					act = action.gsub('$dev', dev)
-					Notify.send(notification.concat("Available RAM: #{mem_available./(1024).round(2)} MiB\nTaking action: #{act}"))
+					Notify.send(notification.concat("Available RAM: #{mem_available./(1024).round(2)} MiB\nTaking action: #{act}\n")) if notify
 
 					if Kernel.system(action.gsub('$dev', dev))
-						Notify.send(notification.concat("Successful #{act}"))
+						Notify.send(notification.concat("Successful #{act}\n")) if notify
 						Notify.save_to_log(notification) if logging
 					else
-						Notify.send(notification.concat("Cannot run #{act}"))
+						Notify.send(notification.concat("Cannot run #{act}")) if notify
 						Notify.save_to_log(notification) if logging
 					end
 				else
@@ -116,11 +115,17 @@ def help
 			This program can work with multiple swap devices.
 
 		Arguments:
+			#{File.basename($0)} --dnd            Disable notification service (Do Not disturb)
 			#{File.basename($0)} --help          Show this help section.
+			#{File.basename($0)} --show-log           Read and display the contents of the log file.
+			#{File.basename($0)} --log             Enable logging to #{Notify::LOGFILE}.
 			#{File.basename($0)} --truncate=n    Truncate the log by n lines from the beginning.
 			#{File.basename($0)} --version       Show version of this program.
 		EOF
 end
+
+notification, logging = !ARGV.include?('--dnd'), ARGV.include?('--log')
+ARGV.tap { |x| x.delete('--dnd') }.delete('--log')
 
 if ARGV[0].to_s[/^\-\-help$/]
 	help
@@ -131,9 +136,14 @@ elsif ARGV[0].to_s[/^\-\-truncate=\d+$/]
 elsif ARGV[0].to_s[/^\-\-version$/]
 	STDOUT.puts ":: #{File.basename($0).split('.rb').join(?\s).capitalize} Version: #{VERSION}"
 
+elsif ARGV[0].to_s[/^\-\-show-log$/]
+	STDOUT.puts IO.read(Notify::LOGFILE).gsub(/\n*\-+\n*/, ?\n * 2)
+
 elsif ARGV.empty?
 	begin
-		main
+		puts "Disabled Notification" unless notification
+		puts "Logging Enabled" if logging
+		main(notify: notification, logging: logging)
 	rescue SignalException, Interrupt, SystemExit
 		puts
 		exit 0
