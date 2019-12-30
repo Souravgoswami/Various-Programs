@@ -1,0 +1,8 @@
+[Unit]
+Description=Keyboard LED to System Monitor
+
+[Service]
+ExecStart=/bin/keyboardlights
+
+[Install]
+WantedBy=multi-user.target
