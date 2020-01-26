@@ -2,15 +2,22 @@
 #Frozen_String_Literal: true
 $-v = nil
 
+abort "#{RUBY_ENGINE.capitalize} #{RUBY_VERSION} is not supported! Please use Ruby 2.4+" if RUBY_VERSION.split(?.).first(2).join.to_i < 24
+abort "This program is written only for Linux!" unless /linux/ === RUBY_PLATFORM
+
+Kernel.class_exec { define_method(:then) { | &b | b === self } } unless Kernel.respond_to?(:then)
+String.class_exec { define_method(:delete_suffix) { |arg| slice(-arg.length..-1) == arg ? slice(0...length - arg.length) : itself } } unless String.respond_to?(:delete_suffix)
+
 GC.start(full_mark: true, immediate_sweep: true)
 
-def main(clear: false)
+def main(clear: false, refresh: 50.0)
 	get_swap_usage = proc { IO.readlines('/proc/swaps').drop(1).map! { |x| x &.split &.[](3).to_i }.sum.fdiv(1024) }
 	get_disk_status = proc { |partition| IO.foreach('/proc/diskstats').find { |x| x.split[2] == partition } &.split.to_a[11].to_i }
+	refresh /= 1000.0
 
 	get_cpu_usage = proc do
 		data = IO.foreach('/proc/stat').first.split.map!(&:to_f)
-		Kernel.sleep(0.05)
+		Kernel.sleep(refresh)
 		prev_data = IO.foreach('/proc/stat').first.split.map!(&:to_f)
 		%w(user nice sys idle iowait irq softirq steal).each_with_index { |el, ind| binding.eval("@#{el}, @prev_#{el} = #{data[ind + 1]}, #{prev_data[ind + 1]}") }
 		previdle, idle = @prev_idle + @prev_iowait, @idle + @iowait
@@ -34,6 +41,7 @@ def main(clear: false)
 	if (cp || sw || st)
 		unless clear
 			puts "\e[38;5;33mStarted Monitoring #{"CPU Usage [ \e[38;5;70mNumlock\e[38;5;33m ], " if cp}#{"Swap Usage [ \e[38;5;70mCaps Lock\e[38;5;33m ], " if sw}#{"Disk IO [ \e[38;5;70mScroll Lock\e[38;5;33m ]\e[0m" if st}".delete_suffix(', ')
+			puts "\e[38;5;196mRefreshing every #{refresh * 1000} millisecond#{ refresh * 1000 != 1 ? ?s : '' }\e[0m"
 
 			while true
 				begin
@@ -57,8 +65,35 @@ def main(clear: false)
 	nil
 end
 
+args = ARGV.join(?=).split(?-).reject(&:empty?)
+
+query = proc { |a, d = 0| args.find { |x| x[a] }.to_s.split(?=)[-1].then { |x| x ? x : d } }
+
+if ARGV.any? { |x| x[/(^\-\-help+$)|(^\-h+$)/] }
+	puts <<~EOF
+		\e[38;5;196m#{Process.argv0} Lets you monitor your system CPU, Swap and IO through keyboard lights.
+
+		\e[38;5;200mLights:
+			\e[0;32mNum Lock LED => On when CPU Usage > 75%
+			\e[0;32mCaps Lock LED => On when Swap is in Use
+			\e[0;32mScroll Lock LED => On when Disk that has / is Busy
+
+		\e[38;5;200m#{Process.argv0} Arguments:
+			\e[38;5;190m1.#{Process.argv0} --help                   This help section
+			2.#{Process.argv0} --refresh=n/ -r=n        Refresh time specified in milliseconds.
+                                                                  [Default: 50]
+		\e[38;5;200m#{Process.argv0} Arguments Example:
+			\e[38;5;12m#{Process.argv0} --refresh=1000
+			#{Process.argv0} --refresh 1000\e[0m
+	EOF
+
+	exit 0
+end
+
+refresh = query.(/(^r\=[0-9\.]*=?+$)|(^refresh\=[0-9\.]*=?+$)/, 50).to_f.then { |x| x < 1 ? 1 : x }
+
 begin
-	main
+	main(refresh: refresh)
 rescue Interrupt, SignalException, SystemExit
 	puts "\n\e[38;5;45mBye!\e[0m"
 rescue Errno::EACCES
