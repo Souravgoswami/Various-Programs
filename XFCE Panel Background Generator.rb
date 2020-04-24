@@ -1,12 +1,14 @@
 #!/usr/bin/ruby -w
 require 'chunky_png'
+current_time = Time.now
 
-W, H = 1920, 1000
+W, H = 1920, 100
 PARTICLE_SIZE = proc { rand(1..2) }
-PARTICLES = 750000
-BG_COLOUR = proc { [0, 255, 0, 128] }
+PARTICLES = 500
+BG_COLOUR = proc { [0, 0, 0, 128] }
 COLOUR = proc { [255, 255, 255, 255].freeze }
 OUTPUT = File.join(__dir__, 'panel.png')
+# ANIM_CHARS = ["\xE2\xA0\xA0", "\xE2\xA0\x84", "\xE2\xA0\x82", "\xE2\xA0\x90"] #.map!(&:freeze).freeze
 ANIM_CHARS = ["\xF0\x9F\x95\x90", "\xF0\x9F\x95\x91", "\xF0\x9F\x95\x92", "\xF0\x9F\x95\x93", "\xF0\x9F\x95\x94", "\xF0\x9F\x95\x95", "\xF0\x9F\x95\x96", "\xF0\x9F\x95\x97", "\xF0\x9F\x95\x98", "\xF0\x9F\x95\x99", "\xF0\x9F\x95\x9A", "\xF0\x9F\x95\x9B"]
 
 png = ChunkyPNG::Image.new(W, H, ChunkyPNG::Color::TRANSPARENT)
@@ -46,3 +48,5 @@ end
 
 print " \e[2K\xF0\x9F\x92\xBE Saving Image: #{OUTPUT}\r"
 png.save(OUTPUT, :interlace => true)
+
+puts "\e[2KTotal Time Taken: #{Time.now.-(current_time).round(3)}s"
