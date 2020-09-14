@@ -4,17 +4,17 @@
 # ---- User Modifable Values ---- #
 
 # Width and Height of the stickers. Whatsapp uses 512x512 max
-W, H = 432, 432
+W, H = 512, 512
 
 # Quality of the generated webp images
 WEBP_QUALITY = 60
 
 # Margin around stickers
-MARGIN = 54
+MARGIN = 48
 
 # Maximum task to give to each CPU core
 require 'etc'
-MAX_TASKS = Etc.nprocessors * 2
+MAX_TASKS = Etc.nprocessors
 
 
 # ---- Main Code ---- #
@@ -47,13 +47,11 @@ Dir.glob("#{__dir__}/set-[0-9]*/").each do |x|
 			stats = []
 
 			stats.concat([
-				system(%Q`inkscape --export-margin=#{MARGIN} "#{f}" --export-filename "#{converted_file}.svg" &>/dev/null`),
-				system(%Q`inkscape -w #{W} -h #{H} "#{converted_file}.svg" --export-filename "#{converted_file}.png" &>/dev/null`),
-				system(%Q`convert -quality "#{WEBP_QUALITY}" "#{converted_file}.png" "#{converted_file}.webp" &>/dev/null`)
+				system(%Q`inkscape -w #{W - MARGIN * 2} -h #{H - MARGIN * 2} '#{f}' --export-filename '#{converted_file}.png' &>/dev/null`),
+				system(%Q`convert -border #{MARGIN} -bordercolor none -quality '#{WEBP_QUALITY}' '#{converted_file}.png' '#{converted_file}.webp' &>/dev/null`)
 			])
 
 			raise RuntimeError unless stats.all?(&:itself)
-			File.delete(converted_file + '.svg'.freeze)
 			File.delete(converted_file + '.png'.freeze)
 		end
 	end
