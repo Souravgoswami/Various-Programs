@@ -34,7 +34,7 @@ manage_pid = ->(x) do
 end
 
 Dir.glob("#{__dir__}/set-[0-9]*/").each do |x|
-	dir = "#{File.dirname(x)}/png-#{File.basename(x)}"
+	dir = "#{File.dirname(x)}/webp-#{File.basename(x)}"
 	Dir.mkdir(dir) unless Dir.exist?(dir)
 
 	Dir.children(x).each do |y|
