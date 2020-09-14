@@ -48,11 +48,10 @@ Dir.glob("#{__dir__}/set-[0-9]*/").each do |x|
 
 			stats.concat([
 				system(%Q`inkscape -w #{W - MARGIN * 2} -h #{H - MARGIN * 2} '#{f}' --export-filename '#{converted_file}.png' &>/dev/null`),
-				system(%Q`convert -border #{MARGIN} -bordercolor none -quality '#{WEBP_QUALITY}' '#{converted_file}.png' '#{converted_file}.webp' &>/dev/null`)
+				system(%Q`convert -border #{MARGIN} -bordercolor none -quality '#{WEBP_QUALITY}' '#{converted_file}.png' '#{converted_file}.png' &>/dev/null`)
 			])
 
 			raise RuntimeError unless stats.all?(&:itself)
-			File.delete(converted_file + '.png'.freeze)
 		end
 	end
 end
