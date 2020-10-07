@@ -1,0 +1,99 @@
+#!/usr/bin/env ruby
+#Frozen_String_Literal: true
+$-v = nil
+
+abort "#{RUBY_ENGINE.capitalize} #{RUBY_VERSION} is not supported! Please use Ruby 2.4+" if RUBY_VERSION.split(?.).first(2).join.to_i < 24
+abort "This program is written only for Linux!" unless /linux/ === RUBY_PLATFORM
+
+Kernel.class_exec { define_method(:then) { | &b | b === self } } unless Kernel.respond_to?(:then)
+
+def main(clear: false, refresh:)
+	get_swap_usage = proc { IO.readlines('/proc/swaps').drop(1).map! { |x| x.split[3].to_i }.sum }
+	get_disk_status = proc { |partition| IO.foreach('/proc/diskstats').find { |x| x.split[2] == partition } &.split.to_a[11] }
+
+	refresh /= 1000.0
+
+	get_cpu_usage = proc do
+		user, nice, sys, idle, iowait, irq, softirq, steal = IO.foreach('/proc/stat').first.split[1..8].map(&:to_i)
+		Kernel.sleep(refresh)
+		prev_user, prev_nice, prev_sys, prev_idle, prev_iowait, prev_irq, prev_softirq, prev_steal = IO.foreach('/proc/stat').first.split[1..8].map(&:to_i)
+
+		previdle, idle = prev_idle + prev_iowait, idle + iowait
+		totald = idle + (user + nice + sys + irq + softirq + steal) - previdle.+(prev_user + prev_nice + prev_sys + prev_irq + prev_softirq + prev_steal)
+		totald.to_f.-(idle - previdle)./(totald).*(100)
+	end
+
+	n = Dir['/sys/class/leds/input[0-9]*::numlock/brightness']
+	c = Dir['/sys/class/leds/input[0-9]*::capslock/brightness']
+	s = Dir['/sys/class/leds/input[0-9]*::scrolllock/brightness']
+
+	fail Errno::EACCES unless [n, c, s].all? { |x| x.all? { |y| File.owned?(y) } }
+
+	root_partition = IO.foreach('/proc/mounts').detect { |x| x.split[1] == ?/ }.to_s.split[0].to_s.split(?/).to_a[-1]
+
+	check = -> k, l { puts l.-(k).empty? ?  k.-(l).empty? ? '' : "\e[1;32m:: New LED\e[0m #{k.-(l).join(', ')}" : "\e[1;33m:: Removed LED\e[0m #{l.-(k).join(', ')}" }
+
+	unless clear
+		puts "\e[38;5;33mStarted Monitoring CPU Usage [ \e[38;5;70mNumlock\e[38;5;33m ] Swap Usage [ \e[38;5;70mCaps Lock\e[38;5;33m ] Disk IO [ \e[38;5;70mScroll Lock\e[38;5;33m ]\e[0m"
+		puts "\e[38;5;196mRefreshing every #{refresh * 1000} millisecond#{ refresh * 1000 != 1 ? ?s : '' }\e[0m"
+
+		begin
+			while true
+				Dir['/sys/class/leds/input[0-9]*::numlock/brightness'].tap { |x| check.(x, n)  || n.replace(x) unless x == n }
+				Dir['/sys/class/leds/input[0-9]*::capslock/brightness'].tap { |x| check.(x, c)  || c.replace(x) unless x == c }
+				Dir['/sys/class/leds/input[0-9]*::scrolllock/brightness'].tap { |x|  check.(x, s)  || s.replace(x) unless x == s }
+
+				get_cpu_usage.call > 75 ? n.each { |x| IO.write(x, 1) unless IO.read(x, 1) == ?1 } : n.each { |x| IO.write(x, 0) unless IO.read(x, 1) == ?0 }
+				get_swap_usage.call > 0 ? c.each { |x| IO.write(x, 1) unless IO.read(x, 1) == ?1 } : c.each { |x| IO.write(x, 0) unless IO.read(x, 1) == ?0 }
+				get_disk_status.(root_partition) != ?0 ? s.each { |x| IO.write(x, 1) unless IO.read(x, 1) == ?1 } : s.each { |x| IO.write(x, 0) unless IO.read(x, 1) == ?0 }
+			end
+		rescue StandardError
+			sleep refresh
+			retry
+		end
+	else
+		n.each { |x| IO.write(x, 0) unless IO.read(x, 1) == ?0 }
+		c.each { |x| IO.write(x, 0) unless IO.read(x, 1) == ?0 }
+		s.each { |x| IO.write(x, 0) unless IO.read(x, 1) == ?0 }
+	end
+
+	nil
+end
+
+args = ARGV.join(?=).split(?-).reject(&:empty?)
+query = proc { |a, d = 0| args.find { |x| x[a] }.to_s.split(?=)[-1].then { |x| x ? x : d } }
+
+if ARGV.any? { |x| x[/(^\-\-help+$)|(^\-h+$)/] }
+	puts <<~EOF
+		\e[38;5;196m#{Process.argv0} Lets you monitor your system CPU, Swap and IO through keyboard lights.
+
+		\e[38;5;200mLights:
+			\e[0;32mNum Lock LED => On when CPU Usage > 75%
+			\e[0;32mCaps Lock LED => On when Swap is in Use
+			\e[0;32mScroll Lock LED => On when Disk that has / is Busy
+
+		\e[38;5;200m#{Process.argv0} Arguments:
+			\e[38;5;190m1.#{Process.argv0} --help                   This help section
+			2.#{Process.argv0} --refresh=n/ -r=n        Refresh time specified in milliseconds.
+                                                                  [Default: 80]
+		\e[38;5;200m#{Process.argv0} Arguments Example:
+			\e[38;5;12m#{Process.argv0} --refresh=1000
+			#{Process.argv0} --refresh 1000\e[0m
+	EOF
+
+	exit 0
+end
+
+refresh = query.(/(^r\=[0-9\.]*=?+$)|(^refresh\=[0-9\.]*=?+$)/, 80).to_f.then { |x| x < 1 ? 1 : x }
+
+begin
+	main(refresh: refresh)
+rescue Interrupt, SignalException, SystemExit
+	puts "\n\e[38;5;45mBye!\e[0m"
+rescue Errno::EACCES
+	puts "\n\e[1;31mPermission Denied. Try Running #{$0} as Root.\e[0m" unless system('notify-send', ":: #{$0}: Permission Denied. Try Running #{$0} as Root.")
+rescue Exception
+	puts $!
+ensure
+	main(clear: true, refresh: 0) rescue nil
+end
