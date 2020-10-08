@@ -14,9 +14,10 @@ def main(clear: false, refresh:)
 	refresh /= 1000.0
 
 	get_cpu_usage = proc do
-		user, nice, sys, idle, iowait, irq, softirq, steal = IO.foreach('/proc/stat').first.split[1..8].map(&:to_i)
-		Kernel.sleep(refresh)
 		prev_user, prev_nice, prev_sys, prev_idle, prev_iowait, prev_irq, prev_softirq, prev_steal = IO.foreach('/proc/stat').first.split[1..8].map(&:to_i)
+		Kernel.sleep(refresh)
+		user, nice, sys, idle, iowait, irq, softirq, steal = IO.foreach('/proc/stat').first.split[1..8].map(&:to_i)
+		
 
 		previdle, idle = prev_idle + prev_iowait, idle + iowait
 		totald = idle + (user + nice + sys + irq + softirq + steal) - previdle.+(prev_user + prev_nice + prev_sys + prev_irq + prev_softirq + prev_steal)
